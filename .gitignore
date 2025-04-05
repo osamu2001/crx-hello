@@ -1,0 +1,54 @@
+# See https://help.github.com/ignore-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# production
+/build
+/package
+/dist
+/dist-ssr
+
+# IDE / エディタ
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.sublime-project
+*.sublime-workspace
+
+# misc
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+.history
+*.log
+.directory
+Thumbs.db
+
+# キャッシュ
+.eslintcache
+.npm
+.cache
+.parcel-cache
+.vite/
+
+# TypeScript
+*.tsbuildinfo
+
+# Vite
+.vite/
+
+# テンポラリファイル
+.tmp
+.temp
+
+# secrets
+secrets.*.js
