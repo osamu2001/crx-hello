@@ -52,10 +52,28 @@ export const Popup = () => {
     }
   }
 
+  const joinAllWindows = async () => {
+    try {
+      const currentWin = await chrome.windows.getCurrent()
+      const allWins = await chrome.windows.getAll({ populate: true })
+      for (const win of allWins) {
+        if (win.id === currentWin.id) continue
+        for (const tab of win.tabs || []) {
+          chrome.tabs.move(tab.id!, { windowId: currentWin.id!, index: -1 })
+        }
+      }
+      setMessage('全ウィンドウのタブを統合しました')
+    } catch (error) {
+      console.error(error)
+      setMessage('統合に失敗しました')
+    }
+  }
+
   return (
     <main>
       <button onClick={copyTabUrls}>URL一覧コピー</button>
       <button onClick={sortTabsByUrl}>タブをURL順に並び替え</button>
+      <button onClick={joinAllWindows}>全ウィンドウのタブを統合</button>
       {message && <p>{message}</p>}
     </main>
   )
