@@ -26,7 +26,7 @@ export const Popup = () => {
 
   const copyTabUrls = async () => {
     try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+      const tabs = await chrome.tabs.query({})
       const urls = tabs.map(tab => tab.url).join('\n')
       await navigator.clipboard.writeText(urls)
       setMessage('アクティブなタブのURLをコピーしました')
