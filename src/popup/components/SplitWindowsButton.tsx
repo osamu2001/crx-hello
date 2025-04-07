@@ -14,8 +14,19 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
         'primevideo.com',
       ];
 
-      // まず全ウィンドウを現在のウィンドウに統合
+      // 呼び出し元ウィンドウ＆タブ
       const currentWin = await chrome.windows.getCurrent();
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const currentTabUrl = currentTab.url || '';
+
+      const isVideoTab = (
+        currentTabUrl.includes('youtube.com') ||
+        currentTabUrl.includes('netflix.com') ||
+        currentTabUrl.includes('unext.jp') ||
+        currentTabUrl.startsWith('https://www.amazon.co.jp/gp/video')
+      );
+
+      // すべてのウィンドウのタブを呼び出し元ウィンドウに統合
       const allWins = await chrome.windows.getAll({ populate: true });
       for (const win of allWins) {
         if (win.id === currentWin.id) continue;
@@ -24,68 +35,50 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
         }
       }
 
-      // 統合後のウィンドウの全タブを取得
+      // 統合後の全タブを取得
       const tabs = await chrome.tabs.query({ windowId: currentWin.id });
 
-      const videoTabs: chrome.tabs.Tab[] = [];
-      const otherTabs: chrome.tabs.Tab[] = [];
+      const sameGroupTabs: chrome.tabs.Tab[] = [];
+      const otherGroupTabs: chrome.tabs.Tab[] = [];
 
       for (const tab of tabs) {
         try {
           const urlStr = tab.url || '';
-          if (
+          const isVideo = (
             urlStr.includes('youtube.com') ||
             urlStr.includes('netflix.com') ||
             urlStr.includes('unext.jp') ||
             urlStr.startsWith('https://www.amazon.co.jp/gp/video')
-          ) {
-            videoTabs.push(tab);
+          );
+
+          if (isVideo === isVideoTab) {
+            sameGroupTabs.push(tab);
           } else {
-            otherTabs.push(tab);
+            otherGroupTabs.push(tab);
           }
         } catch {
-          otherTabs.push(tab);
+          otherGroupTabs.push(tab);
         }
       }
 
-      // 動画系グループの新規ウィンドウ作成
-      let videoWinId: number | undefined;
-      if (videoTabs.length > 0) {
-        const firstTab = videoTabs.shift()!;
-        const videoWin = await chrome.windows.create({ tabId: firstTab.id! });
-        videoWinId = videoWin.id;
+      // 異なるグループのタブを新規ウィンドウに移動
+      if (otherGroupTabs.length > 0) {
+        const firstTab = otherGroupTabs.shift()!;
+        const newWin = await chrome.windows.create({ tabId: firstTab.id! });
+        const newWinId = newWin.id;
 
-        if (videoTabs.length > 0 && videoWinId !== undefined) {
+        if (otherGroupTabs.length > 0 && newWinId !== undefined) {
           await chrome.tabs.move(
-            videoTabs.map(t => t.id!).filter(Boolean),
-            { windowId: videoWinId, index: -1 }
+            otherGroupTabs.map(t => t.id!).filter(Boolean),
+            { windowId: newWinId, index: -1 }
           );
         }
       }
 
-      // その他グループの新規ウィンドウ作成
-      let otherWinId: number | undefined;
-      if (otherTabs.length > 0) {
-        const firstTab = otherTabs.shift()!;
-        const otherWin = await chrome.windows.create({ tabId: firstTab.id! });
-        otherWinId = otherWin.id;
+      // 呼び出し元ウィンドウを最前面に
+      await chrome.windows.update(currentWin.id!, { focused: true });
 
-        if (otherTabs.length > 0 && otherWinId !== undefined) {
-          await chrome.tabs.move(
-            otherTabs.map(t => t.id!).filter(Boolean),
-            { windowId: otherWinId, index: -1 }
-          );
-        }
-      }
-
-      // 念のため元の統合ウィンドウを再度閉じる（空でなくても強制）
-      try {
-        await chrome.windows.remove(currentWin.id!);
-      } catch (e) {
-        // 既に閉じていれば無視
-      }
-
-      setMessage('全ウィンドウを統合し、動画系とその他に分割しました');
+      setMessage('全ウィンドウを統合し、呼び出し元基準で2分割しました');
     } catch (error) {
       console.error(error);
       setMessage('統合と分割に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
