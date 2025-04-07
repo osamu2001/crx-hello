@@ -32,9 +32,13 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
 
       for (const tab of tabs) {
         try {
-          const urlObj = new URL(tab.url || '');
-          const hostname = urlObj.hostname;
-          if (videoDomains.some(domain => hostname.includes(domain))) {
+          const urlStr = tab.url || '';
+          if (
+            urlStr.includes('youtube.com') ||
+            urlStr.includes('netflix.com') ||
+            urlStr.includes('unext.jp') ||
+            urlStr.startsWith('https://www.amazon.co.jp/gp/video')
+          ) {
             videoTabs.push(tab);
           } else {
             otherTabs.push(tab);
