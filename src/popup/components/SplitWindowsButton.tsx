@@ -13,6 +13,14 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
         'unext.jp',
         'primevideo.com',
       ];
+      // AIツールのドメインリスト
+      const aiDomains = [
+        'chat.openai.com',
+        'chatgpt.com',
+        'gemini.google.com',
+        'perplexity.ai',
+        // 必要に応じて追加
+      ];
 
       // 呼び出し元ウィンドウ＆タブ
       const currentWin = await chrome.windows.getCurrent();
@@ -20,9 +28,7 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
       const currentTabUrl = currentTab.url || '';
 
       const isVideoTab = (
-        currentTabUrl.includes('youtube.com') ||
-        currentTabUrl.includes('netflix.com') ||
-        currentTabUrl.includes('unext.jp') ||
+        videoDomains.some(domain => currentTabUrl.includes(domain)) ||
         currentTabUrl.startsWith('https://www.amazon.co.jp/gp/video')
       );
 
@@ -38,39 +44,71 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
       // 統合後の全タブを取得
       const tabs = await chrome.tabs.query({ windowId: currentWin.id });
 
-      const sameGroupTabs: chrome.tabs.Tab[] = [];
-      const otherGroupTabs: chrome.tabs.Tab[] = [];
+      // カレントタブのグループを判定
+      const isCurrentAI = aiDomains.some(domain => currentTabUrl.includes(domain));
+      const isCurrentVideo = (
+        videoDomains.some(domain => currentTabUrl.includes(domain)) ||
+        currentTabUrl.startsWith('https://www.amazon.co.jp/gp/video')
+      );
+      let currentGroup: 'ai' | 'video' | 'other' = 'other';
+      if (isCurrentAI) currentGroup = 'ai';
+      else if (isCurrentVideo) currentGroup = 'video';
 
+      // タブをグループ分け
+      const aiTabs: chrome.tabs.Tab[] = [];
+      const videoTabs: chrome.tabs.Tab[] = [];
+      const otherTabs: chrome.tabs.Tab[] = [];
       for (const tab of tabs) {
         try {
           const urlStr = tab.url || '';
+          const isAI = aiDomains.some(domain => urlStr.includes(domain));
           const isVideo = (
-            urlStr.includes('youtube.com') ||
-            urlStr.includes('netflix.com') ||
-            urlStr.includes('unext.jp') ||
+            videoDomains.some(domain => urlStr.includes(domain)) ||
             urlStr.startsWith('https://www.amazon.co.jp/gp/video')
           );
-
-          if (isVideo === isVideoTab) {
-            sameGroupTabs.push(tab);
+          if (isAI) {
+            aiTabs.push(tab);
+          } else if (isVideo) {
+            videoTabs.push(tab);
           } else {
-            otherGroupTabs.push(tab);
+            otherTabs.push(tab);
           }
         } catch {
-          otherGroupTabs.push(tab);
+          otherTabs.push(tab);
         }
       }
 
-      // 異なるグループのタブを新規ウィンドウに移動
-      if (otherGroupTabs.length > 0) {
-        const firstTab = otherGroupTabs.shift()!;
-        const newWin = await chrome.windows.create({ tabId: firstTab.id! });
-        const newWinId = newWin.id;
-
-        if (otherGroupTabs.length > 0 && newWinId !== undefined) {
+      // カレントグループ以外を新規ウィンドウに分離
+      if (currentGroup !== 'ai' && aiTabs.length > 0) {
+        const firstAITab = aiTabs.shift()!;
+        const aiWin = await chrome.windows.create({ tabId: firstAITab.id! });
+        const aiWinId = aiWin.id;
+        if (aiTabs.length > 0 && aiWinId !== undefined) {
           await chrome.tabs.move(
-            otherGroupTabs.map(t => t.id!).filter(Boolean),
-            { windowId: newWinId, index: -1 }
+            aiTabs.map(t => t.id!).filter(Boolean),
+            { windowId: aiWinId, index: -1 }
+          );
+        }
+      }
+      if (currentGroup !== 'video' && videoTabs.length > 0) {
+        const firstVideoTab = videoTabs.shift()!;
+        const videoWin = await chrome.windows.create({ tabId: firstVideoTab.id! });
+        const videoWinId = videoWin.id;
+        if (videoTabs.length > 0 && videoWinId !== undefined) {
+          await chrome.tabs.move(
+            videoTabs.map(t => t.id!).filter(Boolean),
+            { windowId: videoWinId, index: -1 }
+          );
+        }
+      }
+      if (currentGroup !== 'other' && otherTabs.length > 0) {
+        const firstOtherTab = otherTabs.shift()!;
+        const otherWin = await chrome.windows.create({ tabId: firstOtherTab.id! });
+        const otherWinId = otherWin.id;
+        if (otherTabs.length > 0 && otherWinId !== undefined) {
+          await chrome.tabs.move(
+            otherTabs.map(t => t.id!).filter(Boolean),
+            { windowId: otherWinId, index: -1 }
           );
         }
       }
@@ -78,7 +116,7 @@ const SplitWindowsButton: React.FC<Props> = ({ setMessage }) => {
       // 呼び出し元ウィンドウを最前面に
       await chrome.windows.update(currentWin.id!, { focused: true });
 
-      setMessage('全ウィンドウを統合し、呼び出し元基準で2分割しました');
+      setMessage('全ウィンドウを統合し、カレントタブ基準でAI/動画/その他に3分割しました');
     } catch (error) {
       console.error(error);
       setMessage('統合と分割に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
